@@ -1,0 +1,21 @@
+{
+  "name": "amplify-s3",
+  "version": "1.0.2",
+  "description": "Manage S3 with Amplify Project",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bin": {
+    "amplifys3": "index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.836.0",
+    "boxen": "^4.0.0",
+    "chalk": "^2.4.2",
+    "dash": "^3.17.0",
+    "yargs": "^16.2.0"
+  }
+}
