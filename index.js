@@ -6,24 +6,24 @@ const fs = require('fs');
 const path = require('path');
 const chalk = require("chalk");
 const boxen = require("boxen");
+const Confirm = require('prompt-confirm');
+
+const prompt = new Confirm('Do you confirm to delete?');
 
 let amplifyConfig, amplifyMeta
 try {
     const options = yargs
         .help()
-        .command('$0', 'help', () => { }, (argv) => {
-            info(`Commands:
-amplifys3 ls [path]                  List S3 objects
-amplifys3 upload <localPath> [path]  Upload a local file to S3
-          `);
-            process.exit(1);
-        })
-        .command('ls [path]', 'List S3 objects and common prefixes under a prefix or all S3 buckets')
-        .command('upload <localPath> [path]', 'Upload a local file to S3.')
+        .demandCommand()
+        .command('ls [path]', 'List S3 objects of certain path in bucket.')
+        .command('upload <localPath> [path]', 'Upload a file or a directory to S3 bucket')
+        .command('rm <path>', 'Remove a file or a directory from S3 bucket')
         .argv;
     amplifyConfig = require(`${process.env['HOME']}/.amplify/admin/config.json`);
     amplifyMeta = require(`${process.cwd()}/amplify/#current-cloud-backend/amplify-meta.json`);
-    
+    const bucketName = Object.values(amplifyMeta.storage)[0].output.BucketName;
+    const appId = amplifyMeta.providers.awscloudformation.AmplifyAppId;
+
     initToken(appId).then((config) => {
         const s3 = new aws.S3();
         switch (options._[0]) {
@@ -64,6 +64,52 @@ Name          Size          LastModified
                             log(`${data.Key} uploaded successfully`);
                         }
                     });
+                });
+                break;
+            case 'rm':
+                prompt.ask(function (answer) {
+                    if (answer) {
+                        const listParams = {
+                            Bucket: bucketName,
+                            Prefix: `public/${options.path ? options.path : ''}`
+                        };
+                        const rmParams = {
+                            Bucket: bucketName,
+                            Delete: {
+                                Objects: [],
+                                Quiet: false
+                            }
+                        };
+                        s3.listObjectsV2(listParams, function (err, data) {
+                            if (err) error(err);
+                            else {
+                                data.Contents.forEach((item) => {
+                                    rmParams.Delete.Objects.push({
+                                        Key: item.Key,
+                                    });
+                                });
+                                s3.deleteObjects(rmParams, function (err, data) {
+                                    if (err) error(err);
+                                    else {
+                                        let success = '';
+                                        let fail = '';
+                                        data.Deleted.forEach(del => {
+                                            success += `${del.Key}\n`;
+                                        });
+                                        data.Errors.forEach(e => {
+                                            fail += `${e.Key}:  ${e.Message}\n`;
+                                        });
+                                        if (success) {
+                                            info(success);
+                                        }
+                                        if (fail) {
+                                            error(fail);
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
                 });
                 break;
             default:
