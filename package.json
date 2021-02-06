@@ -9,8 +9,12 @@
   "bin": {
     "amplifys3": "index.js"
   },
-  "author": "",
+  "author": "wenxi",
   "license": "ISC",
+  "repository": {
+    "type" : "git",
+    "url" : "https://github.com/milk531/amplify-s3.git"
+  },
   "dependencies": {
     "aws-sdk": "^2.836.0",
     "boxen": "^4.0.0",
