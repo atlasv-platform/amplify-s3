@@ -1,6 +1,6 @@
 {
   "name": "amplify-s3",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Manage S3 with Amplify Project",
   "main": "index.js",
   "scripts": {
@@ -12,11 +12,12 @@
   "author": "wenxi",
   "license": "ISC",
   "repository": {
-    "type" : "git",
-    "url" : "https://github.com/milk531/amplify-s3.git"
+    "type": "git",
+    "url": "https://github.com/milk531/amplify-s3.git"
   },
   "dependencies": {
     "aws-sdk": "^2.836.0",
+    "aws-sdk-s3-sync": "^0.1.1",
     "boxen": "^4.0.0",
     "chalk": "^2.4.2",
     "dash": "^3.17.0",

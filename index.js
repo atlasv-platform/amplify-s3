@@ -7,6 +7,7 @@ const path = require('path');
 const chalk = require("chalk");
 const boxen = require("boxen");
 const Confirm = require('prompt-confirm');
+const {sync} = require('aws-sdk-s3-sync');
 
 const prompt = new Confirm('Do you confirm to delete?');
 
@@ -15,6 +16,7 @@ try {
     const options = yargs
         .help()
         .demandCommand()
+        .command('sync <src> <dest> [subpath]', 'sync the whole public dir from <src> to <dest> or sync a subpath.')
         .command('ls [path]', 'List S3 objects of certain path in bucket.')
         .command('upload <localPath> [path]', 'Upload a file or a directory to S3 bucket')
         .command('rm <path>', 'Remove a file or a directory from S3 bucket')
@@ -24,9 +26,27 @@ try {
     const bucketName = Object.values(amplifyMeta.storage)[0].output.BucketName;
     const appId = amplifyMeta.providers.awscloudformation.AmplifyAppId;
 
-    initToken(appId).then((config) => {
+    initToken(appId).then(async (config) => {
         const s3 = new aws.S3();
         switch (options._[0]) {
+            case 'sync':
+                const amplifybackend = new aws.AmplifyBackend();
+                const srcMD = await amplifybackend.getBackend({
+                    AppId: appId,
+                    BackendEnvironmentName: options.src
+                }).promise();
+                const srcbuctet = Object.values(JSON.parse(srcMD.AmplifyMetaConfig).storage)[0].output.BucketName;
+                const destMD = await amplifybackend.getBackend({
+                    AppId: appId,
+                    BackendEnvironmentName: options.dest
+                }).promise();
+                const destbuctet = Object.values(JSON.parse(destMD.AmplifyMetaConfig).storage)[0].output.BucketName;
+                let subpath = '/'
+                if (options.subpath)
+                    subpath += options.subpath;
+                const {count,bytes} = await sync(srcbuctet, `public${subpath}`, destbuctet, `public${subpath}`);
+                info(`Total Sync ${count} files, ${(bytes/1024/1024).toFixed(2)} MB in public${subpath}`);
+                break;
             case 'ls':
                 const params = {
                     Bucket: bucketName,
@@ -115,7 +135,7 @@ Name          Size          LastModified
             default:
                 break;
         }
-    });
+    }).catch(error);
 } catch (err) {
     if (err.code === 'MODULE_NOT_FOUND') {
         if (!amplifyConfig) {

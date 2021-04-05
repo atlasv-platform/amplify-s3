@@ -13,7 +13,8 @@ npm install -g amplify-s3
 amplifys3 <command>
 
 Commands:
-  amplifys3 ls [path]                  List S3 objects of certain path in bucket
-  amplifys3 upload <localPath> [path]  Upload a file or a directory to S3 bucket
-  amplifys3 rm <path>                  Remove a file or a directory from S3 bucket
+  amplifys3 sync <src> <dest> [subpath] sync the whole public dir from <src> to <dest> or sync a subpath
+  amplifys3 ls [path]                   List S3 objects of certain path in bucket
+  amplifys3 upload <localPath> [path]   Upload a file or a directory to S3 bucket
+  amplifys3 rm <path>                   Remove a file or a directory from S3 bucket
 ```
