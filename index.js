@@ -7,7 +7,7 @@ const path = require('path');
 const chalk = require("chalk");
 const boxen = require("boxen");
 const Confirm = require('prompt-confirm');
-const {sync} = require('aws-sdk-s3-sync');
+const {sync} = require('./sync');
 
 const prompt = new Confirm('Do you confirm to delete?');
 
@@ -16,7 +16,7 @@ try {
     const options = yargs
         .help()
         .demandCommand()
-        .command('sync <src> <dest> [subpath]', 'sync the whole public dir from <src> to <dest> or sync a subpath.')
+        .command('sync <src> <dest> [subpath] [--delete]', 'sync the whole public dir from <src> to <dest> or sync a subpath. When add [--delete], file that not exist in src will also be deleted in dest.')
         .command('ls [path]', 'List S3 objects of certain path in bucket.')
         .command('upload <localPath> [path]', 'Upload a file or a directory to S3 bucket')
         .command('rm <path>', 'Remove a file or a directory from S3 bucket')
@@ -44,8 +44,8 @@ try {
                 let subpath = '/'
                 if (options.subpath)
                     subpath += options.subpath;
-                const {count,bytes} = await sync(srcbuctet, `public${subpath}`, destbuctet, `public${subpath}`);
-                info(`Total Sync ${count} files, ${(bytes/1024/1024).toFixed(2)} MB in public${subpath}`);
+                const {countAdd, bytesAdd,countRm,bytesRm} = await sync(srcbuctet, `public${subpath}`, destbuctet, `public${subpath}`,options.delete);
+                info(`Sync Summary:\n Add ${countAdd} files, ${sizeTxt(bytesAdd)} in public${subpath}`+ (options.delete?`\n Delete ${countRm} files, ${sizeTxt(bytesRm)} in public${subpath}`:''));
                 break;
             case 'ls':
                 const params = {
@@ -149,6 +149,10 @@ Name          Size          LastModified
         error(err);
     }
 
+}
+function sizeTxt(bytes){
+    if(bytes < 10485) return `${(bytes/1024.0).toFixed(2)} KB`
+    else return `${(bytes/1024.0/1024.0).toFixed(2)} MB`
 }
 function recursiveFiles(filepath, fileList) {
     if (path.basename(filepath).startsWith('.')) {
