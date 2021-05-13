@@ -1,11 +1,9 @@
-const AWS = require("aws-sdk")
 const _ = require('lodash');
-const s3 = new AWS.S3()
 const pThrottle = require('p-throttle');
 const throttledSync = pThrottle(syncObjects, 1000, 1000);
 const throttledDelete = pThrottle(deleteObjects, 1000, 1000);
 const Confirm = require('prompt-confirm');
-
+let s3 = null;
 function syncObjects(from, to, params) {
   var params = {} || params
   return s3.copyObject(Object.assign(params, {
@@ -47,8 +45,8 @@ async function listAll(bucket, prefix) {
   })
 }
 
-async function sync(fromBucket, fromFolder, toBucket, toFolder, deleteNoneExist) {
-
+async function sync(s3Client,fromBucket, fromFolder, toBucket, toFolder, deleteNoneExist) {
+  s3 = s3Client;
   var fromList = await listAll(fromBucket, fromFolder)
   var toList = await listAll(toBucket, toFolder)
 

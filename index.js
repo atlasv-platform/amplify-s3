@@ -16,7 +16,7 @@ try {
     const options = yargs
         .help()
         .demandCommand()
-        .command('sync <src> <dest> [subpath] [--delete]', 'sync the whole public dir from <src> to <dest> or sync a subpath. When add [--delete], file that not exist in src will also be deleted in dest.')
+        .command('sync <src> <dest> [subpath] [--delete]', 'sync the whole public dir from <src> to <dest> or sync a subpath. When add [--delete], file that that only exist in dest will  be deleted.')
         .command('ls [path]', 'List S3 objects of certain path in bucket.')
         .command('upload <localPath> [path]', 'Upload a file or a directory to S3 bucket')
         .command('rm <path>', 'Remove a file or a directory from S3 bucket')
@@ -44,8 +44,12 @@ try {
                 let subpath = '/'
                 if (options.subpath)
                     subpath += options.subpath;
-                const {countAdd, bytesAdd,countRm,bytesRm} = await sync(srcbuctet, `public${subpath}`, destbuctet, `public${subpath}`,options.delete);
-                info(`Sync Summary:\n Add ${countAdd} files, ${sizeTxt(bytesAdd)} in public${subpath}`+ (options.delete?`\n Delete ${countRm} files, ${sizeTxt(bytesRm)} in public${subpath}`:''));
+                try{
+                    const {countAdd, bytesAdd,countRm,bytesRm} = await sync(s3,srcbuctet, `public${subpath}`, destbuctet, `public${subpath}`,options.delete);
+                    info(`Sync Summary:\n Add ${countAdd} files, ${sizeTxt(bytesAdd)} in public${subpath}`+ (options.delete?`\n Delete ${countRm} files, ${sizeTxt(bytesRm)} in public${subpath}`:''));
+                } catch(syncErr) {
+                    error(syncErr);
+                }
                 break;
             case 'ls':
                 const params = {
