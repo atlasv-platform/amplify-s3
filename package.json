@@ -1,6 +1,6 @@
 {
   "name": "amplify-s3",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Manage S3 with Amplify Project",
   "main": "index.js",
   "scripts": {

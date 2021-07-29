@@ -49,14 +49,18 @@ async function sync(s3Client,fromBucket, fromFolder, toBucket, toFolder, deleteN
   s3 = s3Client;
   var fromList = await listAll(fromBucket, fromFolder)
   var toList = await listAll(toBucket, toFolder)
-
-  const addList = _.differenceBy(fromList, toList, 'ETag');
-
+  let addList = _.differenceBy(fromList, toList, 'Key');
+  addList = addList.concat(_.differenceBy(fromList, toList, 'ETag'));
+  addList = _.uniqBy(addList, 'Key');
+  console.log(`Will add ${addList.length} files from ${fromBucket} to ${toBucket}.`);
   let rmList;
   if(deleteNoneExist){
-    rmList = _.differenceBy(toList, fromList, 'ETag');
+    rmList = _.differenceBy(toList, fromList, 'Key');
+    rmList = rmList.concat(_.differenceBy(toList, fromList, 'ETag'));
+    rmList = _.uniqBy(rmList, 'Key');
     if(rmList.length>0){
-        const prompt = new Confirm(`Do you confirm to delete ${rmList.length} files those are no longer in ${fromBucket}/${fromFolder}?`);
+        console.log(`Will remove ${rmList.length} files from ${toBucket}.`);
+        const prompt = new Confirm(`Do you confirm to delete ${rmList.length} files those are no longer in ${fromBucket}/${fromFolder} from ${toBucket}?`);
         const answer = await prompt.run();
         if (!answer) {
             process.exit();
