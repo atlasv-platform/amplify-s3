@@ -8,6 +8,7 @@ const chalk = require("chalk");
 const boxen = require("boxen");
 const Confirm = require('prompt-confirm');
 const {sync} = require('./sync');
+const s3Client = require('s3');
 
 const prompt = new Confirm('Do you confirm to delete?');
 
@@ -19,6 +20,7 @@ try {
         .command('sync <src> <dest> [subpath] [--delete]', 'sync the whole public dir from <src> to <dest> or sync a subpath. When add [--delete], file that that only exist in dest will  be deleted.')
         .command('ls [path]', 'List S3 objects of certain path in bucket.')
         .command('upload <localPath> [path]', 'Upload a file or a directory to S3 bucket')
+        .command('download <s3Path>', 'Download directory from S3 bucket')
         .command('rm <path>', 'Remove a file or a directory from S3 bucket')
         .argv;
     amplifyConfig = require(`${process.env['HOME']}/.amplify/admin/config.json`);
@@ -89,6 +91,32 @@ Name          Size          LastModified
                         }
                     });
                 });
+                break;
+            case 'download':
+                 if (!options.s3Path) {
+                    error("s3Path is empty");
+                 }
+                const s3Options = {
+                    s3Client: s3,
+                  };
+                const client = s3Client.createClient(s3Options);
+                const downloadParams = {
+                    localDir: options.s3Path,
+                    s3Params: { Bucket: bucketName, Prefix: `public/${options.s3Path}/`,},
+                };
+                const downloader = client.downloadDir(downloadParams);
+                downloader.on('fileDownloadStart', function(path, key) {
+                    console.log(`start downloading ${key}`);
+                });
+                downloader.on('fileDownloadEnd', function(path, key) {
+                    console.log(`download ${key} success`);
+                });
+                downloader.on('error', function(err) {
+                    console.error("unable to download:", err.stack);
+                  });
+                downloader.on('end', function() {
+                    console.log("done download!");
+                  });
                 break;
             case 'rm':
                 prompt.ask(function (answer) {
