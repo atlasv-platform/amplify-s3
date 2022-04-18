@@ -1,6 +1,6 @@
 {
   "name": "amplify-s3",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Manage S3 with Amplify Project",
   "main": "index.js",
   "scripts": {
@@ -22,10 +22,6 @@
     "dash": "^3.17.0",
     "p-throttle": "^3.1.0",
     "prompt-confirm": "^2.0.4",
-    "s3": "^4.4.0",
     "yargs": "^16.2.0"
-  },
-  "resolutions": {
-    "graceful-fs": "^4.2.4"
   }
 }

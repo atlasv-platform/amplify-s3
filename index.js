@@ -7,8 +7,7 @@ const path = require('path');
 const chalk = require("chalk");
 const boxen = require("boxen");
 const Confirm = require('prompt-confirm');
-const {sync} = require('./sync');
-const s3Client = require('s3');
+const {sync,listAll,initClient} = require('./sync');
 
 const prompt = new Confirm('Do you confirm to delete?');
 
@@ -22,14 +21,20 @@ try {
         .command('upload <localPath> [path]', 'Upload a file or a directory to S3 bucket')
         .command('download <s3Path>', 'Download directory from S3 bucket')
         .command('rm <path>', 'Remove a file or a directory from S3 bucket')
+        .options({
+            'space': {
+              description: 'change backend service to space',
+              type: 'boolean'
+            }
+        })
         .argv;
     amplifyConfig = require(`${process.env['HOME']}/.amplify/admin/config.json`);
     amplifyMeta = require(`${process.cwd()}/amplify/#current-cloud-backend/amplify-meta.json`);
     const bucketName = Object.values(amplifyMeta.storage)[0].output.BucketName;
     const appId = amplifyMeta.providers.awscloudformation.AmplifyAppId;
-
     initToken(appId).then(async (config) => {
         const s3 = new aws.S3();
+        initClient(s3);
         switch (options._[0]) {
             case 'sync':
                 const amplifybackend = new aws.AmplifyBackend();
@@ -47,7 +52,7 @@ try {
                 if (options.subpath)
                     subpath += options.subpath;
                 try{
-                    const {countAdd, bytesAdd,countRm,bytesRm} = await sync(s3,srcbuctet, `public${subpath}`, destbuctet, `public${subpath}`,options.delete);
+                    const {countAdd, bytesAdd,countRm,bytesRm} = await sync(srcbuctet, `public${subpath}`, destbuctet, `public${subpath}`,options.delete);
                     info(`Sync Summary:\n Add ${countAdd} files, ${sizeTxt(bytesAdd)} in public${subpath}`+ (options.delete?`\n Delete ${countRm} files, ${sizeTxt(bytesRm)} in public${subpath}`:''));
                 } catch(syncErr) {
                     error(syncErr);
@@ -93,30 +98,25 @@ Name          Size          LastModified
                 });
                 break;
             case 'download':
-                 if (!options.s3Path) {
-                    error("s3Path is empty");
-                 }
-                const s3Options = {
-                    s3Client: s3,
-                  };
-                const client = s3Client.createClient(s3Options);
-                const downloadParams = {
-                    localDir: options.s3Path,
-                    s3Params: { Bucket: bucketName, Prefix: `public/${options.s3Path}/`,},
-                };
-                const downloader = client.downloadDir(downloadParams);
-                downloader.on('fileDownloadStart', function(path, key) {
-                    console.log(`start downloading ${key}`);
+                const downloadList = await listAll(bucketName, `public/${options.s3Path}`)
+                downloadList.forEach(s3file => {
+                    if(s3file.Size > 0){
+                        const destFile = `${options.s3Path}${s3file.Key}`;
+                        fs.mkdirSync(path.dirname(destFile),{recursive: true});
+                        const destStream = fs.createWriteStream(destFile);
+                        destStream.on('error', function (err) {
+                            error(err);
+                        });
+                        destStream.on('finish', function (dd) {
+                            log(`${destFile} downloaded successfully`);
+                        });
+                        const down_params = { 
+                            Bucket: bucketName, 
+                            Key: `public/${options.s3Path}${s3file.Key}`
+                        };
+                        s3.getObject(down_params).createReadStream().pipe(destStream);
+                    }
                 });
-                downloader.on('fileDownloadEnd', function(path, key) {
-                    console.log(`download ${key} success`);
-                });
-                downloader.on('error', function(err) {
-                    console.error("unable to download:", err.stack);
-                  });
-                downloader.on('end', function() {
-                    console.log("done download!");
-                  });
                 break;
             case 'rm':
                 prompt.ask(function (answer) {

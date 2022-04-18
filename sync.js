@@ -31,6 +31,9 @@ function fetchList(bucket, prefix, ContinuationToken) {
   return s3.listObjectsV2(params).promise();
 }
 
+function initClient(s3Client) {
+  s3 = s3Client;
+}
 async function listAll(bucket, prefix) {
   var allFiles = []
   var fetchedList = {};
@@ -45,8 +48,7 @@ async function listAll(bucket, prefix) {
   })
 }
 
-async function sync(s3Client,fromBucket, fromFolder, toBucket, toFolder, deleteNoneExist) {
-  s3 = s3Client;
+async function sync(fromBucket, fromFolder, toBucket, toFolder, deleteNoneExist) {
   var fromList = await listAll(fromBucket, fromFolder)
   var toList = await listAll(toBucket, toFolder)
   let addList = _.differenceBy(fromList, toList, 'Key');
@@ -94,7 +96,7 @@ async function sync(s3Client,fromBucket, fromFolder, toBucket, toFolder, deleteN
 }
 
 module.exports = {
-  sync
+  sync,listAll,initClient
 }
 
 if (require.main == module) {
