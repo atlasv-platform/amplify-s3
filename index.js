@@ -6,12 +6,11 @@ const fs = require('fs');
 const path = require('path');
 const chalk = require("chalk");
 const boxen = require("boxen");
-const Confirm = require('prompt-confirm');
+const inquirer = require('inquirer');
 const {sync,listAll,initClient} = require('./sync');
 
-const prompt = new Confirm('Do you confirm to delete?');
-
-let amplifyConfig, amplifyMeta
+let amplifyConfig, amplifyMeta;
+let backendType = 's3';
 try {
     const options = yargs
         .help()
@@ -21,6 +20,7 @@ try {
         .command('upload <localPath> [path]', 'Upload a file or a directory to S3 bucket')
         .command('download <s3Path>', 'Download directory from S3 bucket')
         .command('rm <path>', 'Remove a file or a directory from S3 bucket')
+        .command('init <backend>', 'init a new backend,now only support space.S3 backend do not need to be inited.')
         .options({
             'space': {
               description: 'change backend service to space',
@@ -30,13 +30,68 @@ try {
         .argv;
     amplifyConfig = require(`${process.env['HOME']}/.amplify/admin/config.json`);
     amplifyMeta = require(`${process.cwd()}/amplify/#current-cloud-backend/amplify-meta.json`);
-    const bucketName = Object.values(amplifyMeta.storage)[0].output.BucketName;
+    let bucketName = Object.values(amplifyMeta.storage)[0].output.BucketName;
     const appId = amplifyMeta.providers.awscloudformation.AmplifyAppId;
+    if(options.space){
+        backendType = 'space';
+        if(!fs.existsSync(`.${backendType}/config.json`)){
+            throw new Error('Space Config not found, please use `amplifys3 init space` to create one');
+        }
+    }
     initToken(appId).then(async (config) => {
         const s3 = new aws.S3();
+        if(backendType === 'space') {
+            bucketName = config.bucket;
+        }
         initClient(s3);
         switch (options._[0]) {
+            case 'init':
+                if(options.backend === 'space') {
+                    let questions = [
+                        {
+                          type: 'input',
+                          name: 'bucketName',
+                          message: "Enter DigitalOcean Space BucketName:"
+                        },
+                        {
+                            type: 'list',
+                            name: 'endpoint',
+                            choices:['sfo3.digitaloceanspaces.com','nyc3.digitaloceanspaces.com'],
+                            message: "Enter DigitalOcean Space Endpoint:"
+                          },
+                          {
+                            type: 'input',
+                            name: 'accessKeyId',
+                            message: "Enter DigitalOcean Space AccessKeyId:"
+                          },
+                          {
+                            type: 'input',
+                            name: 'secretAccessKey',
+                            message: "Enter DigitalOcean Space SecretAccessKey:"
+                          }
+                    ]
+                    const init_ans = await inquirer.prompt(questions);
+                    if(init_ans.bucketName && init_ans.endpoint && init_ans.accessKeyId && init_ans.secretAccessKey){
+                        init_config = {
+                            "bucket": init_ans.bucketName,
+                            "endpoint": init_ans.endpoint,
+                            "accessKeyId": init_ans.accessKeyId,
+                            "secretAccessKey": init_ans.secretAccessKey
+                        };
+                        fs.mkdirSync(`.${options.backend}`,{recursive: true});
+                        fs.writeFileSync(`.${options.backend}/config.json`,JSON.stringify(init_config));
+                        log(`${options.backend} backend config has been created`);
+                    } else {
+                        error('Missing one of the config options!')
+                    }
+                } else {
+                    error('No supported backend specified!')
+                }
+                break;
             case 'sync':
+                if(backendType === 'space') {
+                    throw new Error('Command not supported yet for space backend.');
+                }
                 const amplifybackend = new aws.AmplifyBackend();
                 const srcMD = await amplifybackend.getBackend({
                     AppId: appId,
@@ -119,50 +174,54 @@ Name          Size          LastModified
                 });
                 break;
             case 'rm':
-                prompt.ask(function (answer) {
-                    if (answer) {
-                        const listParams = {
-                            Bucket: bucketName,
-                            Prefix: `public/${options.path ? options.path : ''}`
-                        };
-                        const rmParams = {
-                            Bucket: bucketName,
-                            Delete: {
-                                Objects: [],
-                                Quiet: false
-                            }
-                        };
-                        s3.listObjectsV2(listParams, function (err, data) {
-                            if (err) error(err);
-                            else {
-                                data.Contents.forEach((item) => {
-                                    rmParams.Delete.Objects.push({
-                                        Key: item.Key,
+                const {confirmDel} = await inquirer.prompt([
+                    {
+                      type: 'confirm',
+                      name: 'confirmDel',
+                      message: 'Do you confirm to delete?'
+                    },]);
+                if (confirmDel) {
+                    const listParams = {
+                        Bucket: bucketName,
+                        Prefix: `public/${options.path ? options.path : ''}`
+                    };
+                    const rmParams = {
+                        Bucket: bucketName,
+                        Delete: {
+                            Objects: [],
+                            Quiet: false
+                        }
+                    };
+                    s3.listObjectsV2(listParams, function (err, data) {
+                        if (err) error(err);
+                        else {
+                            data.Contents.forEach((item) => {
+                                rmParams.Delete.Objects.push({
+                                    Key: item.Key,
+                                });
+                            });
+                            s3.deleteObjects(rmParams, function (err, data) {
+                                if (err) error(err);
+                                else {
+                                    let success = '';
+                                    let fail = '';
+                                    data.Deleted.forEach(del => {
+                                        success += `${del.Key}\n`;
                                     });
-                                });
-                                s3.deleteObjects(rmParams, function (err, data) {
-                                    if (err) error(err);
-                                    else {
-                                        let success = '';
-                                        let fail = '';
-                                        data.Deleted.forEach(del => {
-                                            success += `${del.Key}\n`;
-                                        });
-                                        data.Errors.forEach(e => {
-                                            fail += `${e.Key}:  ${e.Message}\n`;
-                                        });
-                                        if (success) {
-                                            info(success);
-                                        }
-                                        if (fail) {
-                                            error(fail);
-                                        }
+                                    data.Errors.forEach(e => {
+                                        fail += `${e.Key}:  ${e.Message}\n`;
+                                    });
+                                    if (success) {
+                                        info(success);
                                     }
-                                });
-                            }
-                        });
-                    }
-                });
+                                    if (fail) {
+                                        error(fail);
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
                 break;
             default:
                 break;
@@ -203,15 +262,30 @@ function recursiveFiles(filepath, fileList) {
 }
 
 async function initToken(appId) {
-    admin = amplifyConfig[appId];
-    if (isJwtExpired(admin.idToken)) {
-        refreshResult = await refreshJWTs(admin);
-        admin.idToken.jwtToken = refreshResult.IdToken;
-        admin.accessToken.jwtToken = refreshResult.AccessToken;
+    if(backendType === 's3') {
+        admin = amplifyConfig[appId];
+        if (isJwtExpired(admin.idToken)) {
+            refreshResult = await refreshJWTs(admin);
+            admin.idToken.jwtToken = refreshResult.IdToken;
+            admin.accessToken.jwtToken = refreshResult.AccessToken;
+        }
+        awsConfig = await getAdminCognitoCredentials(admin.idToken, admin.IdentityId, admin.region);
+        aws.config.update(awsConfig);
+        return awsConfig;
+    } else if (backendType === 'space') {
+        spaceConfig = require(`${process.cwd()}/.space/config.json`);
+        awsConfig = {
+            bucket: spaceConfig.bucket,
+            endpoint: `https://${spaceConfig.endpoint}`,
+            region: "us-east-1",
+            credentials: {
+              accessKeyId: spaceConfig.accessKeyId,
+              secretAccessKey: spaceConfig.secretAccessKey
+            }
+        };
+        aws.config.update(awsConfig);
+        return awsConfig;
     }
-    awsConfig = await getAdminCognitoCredentials(admin.idToken, admin.IdentityId, admin.region);
-    aws.config.update(awsConfig);
-    return awsConfig;
 }
 
 async function getAdminCognitoCredentials(idToken, identityId, region) {

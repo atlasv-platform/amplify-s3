@@ -2,7 +2,7 @@ const _ = require('lodash');
 const pThrottle = require('p-throttle');
 const throttledSync = pThrottle(syncObjects, 1000, 1000);
 const throttledDelete = pThrottle(deleteObjects, 1000, 1000);
-const Confirm = require('prompt-confirm');
+const inquirer = require('inquirer');
 let s3 = null;
 function syncObjects(from, to, params) {
   var params = {} || params
@@ -62,8 +62,13 @@ async function sync(fromBucket, fromFolder, toBucket, toFolder, deleteNoneExist)
     rmList = _.uniqBy(rmList, 'Key');
     if(rmList.length>0){
         console.log(`Will remove ${rmList.length} files from ${toBucket}.`);
-        const prompt = new Confirm(`Do you confirm to delete ${rmList.length} files those are no longer in ${fromBucket}/${fromFolder} from ${toBucket}?`);
-        const answer = await prompt.run();
+
+        const {answer} = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'answer',
+            message: `Do you confirm to delete ${rmList.length} files those are no longer in ${fromBucket}/${fromFolder} from ${toBucket}?`
+          },]);
         if (!answer) {
             process.exit();
         }
