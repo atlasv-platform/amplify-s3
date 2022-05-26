@@ -143,7 +143,10 @@ Name          Size          LastModified
                         error(err);
                     });
 
-                    const params = { Bucket: bucketName, Key: `public/${options.path ? options.path + '/' : ''}${isFile ? path.basename(options.localPath) : filePath.replace(options.localPath + '/', '')}`, Body: fileStream };
+                    const params = {Bucket: bucketName, Key: `public/${options.path ? options.path + '/' : ''}${isFile ? path.basename(options.localPath) : filePath.replace(options.localPath + '/', '')}`, Body: fileStream };
+                    if(backendType === 'space') {
+                        params.ACL = 'public-read';
+                    }
                     s3.upload(params, { partSize: 5 * 1024 * 1024, queueSize: 3 }, function (err, data) {
                         if (err) error(err);
                         else {
