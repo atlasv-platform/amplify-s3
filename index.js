@@ -17,9 +17,9 @@ try {
         .demandCommand()
         .command('sync <src> <dest> [subpath] [--delete]', 'sync the whole public dir from <src> to <dest> or sync a subpath. When add [--delete], file that that only exist in dest will  be deleted.')
         .command('ls [path]', 'List S3 objects of certain path in bucket.')
-        .command('upload <localPath> [path]', 'Upload a file or a directory to S3 bucket')
-        .command('download <s3Path>', 'Download directory from S3 bucket')
-        .command('rm <path>', 'Remove a file or a directory from S3 bucket')
+        .command('upload <localPath> [path]', 'Upload a file or a directory to S3 bucket.')
+        .command('download <s3Path> [path]', 'Download directory from S3 bucket.')
+        .command('rm <path>', 'Remove a file or a directory from S3 bucket.')
         .command('init <backend>', 'init a new backend,now only support space.S3 backend do not need to be inited.')
         .options({
             'space': {
@@ -159,7 +159,11 @@ Name          Size          LastModified
                 const downloadList = await listAll(bucketName, `public/${options.s3Path}`)
                 downloadList.forEach(s3file => {
                     if(s3file.Size > 0){
-                        const destFile = `${options.s3Path}${s3file.Key}`;
+                        let targetPath = options.path;
+                        if (targetPath == undefined) {
+                            targetPath = ""
+                        }
+                        const destFile = `${targetPath}${options.s3Path}${s3file.Key}`;
                         fs.mkdirSync(path.dirname(destFile),{recursive: true});
                         const destStream = fs.createWriteStream(destFile);
                         destStream.on('error', function (err) {
