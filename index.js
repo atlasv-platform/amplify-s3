@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const chalk = require("chalk");
 const boxen = require("boxen");
+const { exec } = require('node:child_process')
 const inquirer = require('inquirer');
 const {sync,listAll,initClient} = require('./sync');
 
@@ -233,7 +234,12 @@ Name          Size          LastModified
             default:
                 break;
         }
-    }).catch(error);
+    }).catch(async (ce) => {
+        error(ce);
+        if(ce.code === 'NotAuthorizedException'){
+            log('Amplify Credentials is not exist or expired,please run `amplify console` to login.');
+        }
+    });
 } catch (err) {
     if (err.code === 'MODULE_NOT_FOUND') {
         if (!amplifyConfig) {
