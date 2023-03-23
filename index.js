@@ -15,7 +15,6 @@ let amplifyConfig, amplifyMeta;
 let backendType = 's3';
 
 const agent = new https.Agent({
-    maxSockets: 300,
     keepAlive: true
 });
 aws.config.update({
