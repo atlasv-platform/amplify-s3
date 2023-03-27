@@ -9,9 +9,22 @@ const boxen = require("boxen");
 const { exec } = require('node:child_process')
 const inquirer = require('inquirer');
 const {sync,listAll,initClient} = require('./sync');
+const https = require('https');
 
 let amplifyConfig, amplifyMeta;
 let backendType = 's3';
+
+const agent = new https.Agent({
+    keepAlive: true
+});
+aws.config.update({
+    httpOptions: {
+        timeout: 180000,
+        connectTimeout: 180000,
+        agent: agent
+      }
+});
+
 try {
     const options = yargs
         .help()
@@ -39,6 +52,7 @@ try {
             throw new Error('Space Config not found, please use `amplifys3 init space` to create one');
         }
     }
+
     initToken(appId).then(async (config) => {
         const s3 = new aws.S3();
         if(backendType === 'space') {
@@ -137,6 +151,7 @@ Name          Size          LastModified
                 break;
             case 'upload':
                 const uploadList = [];
+
                 const isFile = recursiveFiles(options.localPath, uploadList);
                 uploadList.forEach(filePath => {
                     const fileStream = fs.createReadStream(filePath);
@@ -157,12 +172,15 @@ Name          Size          LastModified
                 });
                 break;
             case 'download':
-                const downloadList = await listAll(bucketName, `public/${options.s3Path}`)
+                const downloadList = await listAll(bucketName, `public/${options.s3Path}`);
                 downloadList.forEach(s3file => {
-                    if(s3file.Size > 0){
+                    if(s3file.Size > 0) {
                         let targetPath = options.path;
                         if (targetPath == undefined) {
                             targetPath = ""
+                        }
+                        if (!targetPath.endsWith("/")) {
+                            targetPath = targetPath + "/"
                         }
                         const destFile = `${targetPath}${options.s3Path}${s3file.Key}`;
                         fs.mkdirSync(path.dirname(destFile),{recursive: true});
@@ -252,12 +270,13 @@ Name          Size          LastModified
     } else {
         error(err);
     }
-
 }
+
 function sizeTxt(bytes){
     if(bytes < 10485) return `${(bytes/1024.0).toFixed(2)} KB`
     else return `${(bytes/1024.0/1024.0).toFixed(2)} MB`
 }
+
 function recursiveFiles(filepath, fileList) {
     if (path.basename(filepath).startsWith('.')) {
         return false;
@@ -321,6 +340,7 @@ async function getAdminCognitoCredentials(idToken, identityId, region) {
         sessionToken: Credentials.SessionToken,
     };
 }
+
 async function refreshJWTs(authConfig) {
     const CognitoISP = new aws.CognitoIdentityServiceProvider({ region: authConfig.region });
     try {
@@ -337,15 +357,18 @@ async function refreshJWTs(authConfig) {
         throw e;
     }
 }
+
 function isJwtExpired(token) {
     const expiration = _.get(token, ['payload', 'exp'], 0);
     const secSinceEpoch = Math.round(new Date().getTime() / 1000);
     return secSinceEpoch >= expiration - 60;
 }
+
 function log(str) {
     const msg = chalk.green.bold(str);
     console.log(msg);
 }
+
 function info(str) {
     const msg = chalk.green.bold(str);
     const boxenOptions = {
@@ -355,6 +378,7 @@ function info(str) {
     const msgBox = boxen(msg, boxenOptions);
     console.log(msgBox);
 }
+
 function error(str) {
     const msg = chalk.red.bold(str);
     const boxenOptions = {
