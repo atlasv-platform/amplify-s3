@@ -31,7 +31,7 @@ try {
         .demandCommand()
         .command('sync <src> <dest> [subpath] [--delete]', 'sync the whole public dir from <src> to <dest> or sync a subpath. When add [--delete], file that that only exist in dest will  be deleted.')
         .command('ls [path]', 'List S3 objects of certain path in bucket.')
-        .command('upload <localPath> [path]', 'Upload a file or a directory to S3 bucket.')
+        .command('upload <localPath> [path] [--refreshTime refreshTime]', 'Upload a file or a directory to S3 bucket, refreshTime is the time in seconds to refresh (at least 60).')
         .command('download <s3Path> [path]', 'Download directory from S3 bucket.')
         .command('rm <path>', 'Remove a file or a directory from S3 bucket.')
         .command('init <backend>', 'init a new backend,now only support space.S3 backend do not need to be inited.')
@@ -162,6 +162,12 @@ Name          Size          LastModified
                     const params = {Bucket: bucketName, Key: `public/${options.path ? options.path + '/' : ''}${isFile ? path.basename(options.localPath) : filePath.replace(options.localPath + '/', '')}`, Body: fileStream };
                     if(backendType === 'space') {
                         params.ACL = 'public-read';
+                    }
+                    const refreshTime = parseInt(options.refreshTime);
+                    if (refreshTime != undefined && refreshTime > 0) {
+                        const time = Math.max(refreshTime, 60);
+                        // info('max-age=' + time);
+                        params.CacheControl = 'max-age=' + time;
                     }
                     s3.upload(params, { partSize: 5 * 1024 * 1024, queueSize: 3 }, function (err, data) {
                         if (err) error(err);
