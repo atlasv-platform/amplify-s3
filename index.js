@@ -8,6 +8,7 @@ const chalk = require("chalk");
 const boxen = require("boxen");
 const inquirer = require('inquirer');
 const {sync,listAll,initClient} = require('./sync');
+const { type } = require('os');
 
 let amplifyConfig, amplifyMeta;
 let backendType = 's3';
@@ -114,25 +115,41 @@ try {
                 }
                 break;
             case 'ls':
-                const params = {
-                    Bucket: bucketName,
-                    Prefix: `public/${options.path ? options.path : ''}`
-                };
-                s3.listObjectsV2(params, function (err, data) {
-                    if (err) error(err); // an error occurred
-                    else {
-                        output = `Bucket: ${data.Name}
-List Total: ${data.KeyCount}
-IsTruncated: ${data.IsTruncated}
-                        
-Name          Size          LastModified
-`;
-                        data.Contents.forEach((item) => {
+                let isTruncated = true;
+                let token = null;
+                let totalCount = 0;
+                while (isTruncated) {
+                    const params = {
+                        ContinuationToken: token,
+                        Bucket: bucketName,
+                        MaxKeys: '20000',
+                        Prefix: `public/${options.path ? options.path : ''}`,
+                    };
+                    try{
+                        let response = await s3.listObjectsV2(params).promise();
+                        if(token == null) {
+                            output = `Bucket: ${response.Name}
+                            Name          Size          LastModified\n`;
+                        }
+                        response.Contents.forEach((item) => {
                             output += `${item.Key}  ${item.Size}  ${item.LastModified}\n`
                         })
-                        info(output);
+                        totalCount += response.KeyCount;
+                        if(response.IsTruncated){
+                            token = response.NextContinuationToken;
+                        } else {
+                            let end = `\n\nList Total: ${totalCount} \nIsTruncated: ${response.IsTruncated}\n`;
+                            output += end;
+                            info(output);
+                            isTruncated = false
+                            break
+                        }
                     }
-                });
+                    catch (err){
+                        isTruncated = false
+                        error(err)
+                    } 
+                }
                 break;
             case 'upload':
                 const uploadList = [];
