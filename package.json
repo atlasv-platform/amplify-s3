@@ -1,6 +1,6 @@
 {
   "name": "amplify-s3",
-  "version": "1.3.1",
+  "version": "1.3.5",
   "description": "Manage S3 with Amplify Project",
   "main": "index.js",
   "scripts": {
@@ -14,6 +14,10 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/milk531/amplify-s3.git"
+  },
+  "engines": {
+    "npm": ">=8.0.0 <=9.5.1",
+    "node": ">=16.0.0 <=18.14.1"
   },
   "dependencies": {
     "aws-sdk": "^2.836.0",

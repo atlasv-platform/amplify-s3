@@ -6,21 +6,35 @@ const fs = require('fs');
 const path = require('path');
 const chalk = require("chalk");
 const boxen = require("boxen");
+const { exec } = require('node:child_process')
 const inquirer = require('inquirer');
 const {sync,listAll,initClient} = require('./sync');
+const https = require('https');
 const { type } = require('os');
 
 let amplifyConfig, amplifyMeta;
 let backendType = 's3';
+
+const agent = new https.Agent({
+    keepAlive: true
+});
+aws.config.update({
+    httpOptions: {
+        timeout: 180000,
+        connectTimeout: 15000,
+        agent: agent
+      }
+});
+
 try {
     const options = yargs
         .help()
         .demandCommand()
         .command('sync <src> <dest> [subpath] [--delete]', 'sync the whole public dir from <src> to <dest> or sync a subpath. When add [--delete], file that that only exist in dest will  be deleted.')
         .command('ls [path]', 'List S3 objects of certain path in bucket.')
-        .command('upload <localPath> [path]', 'Upload a file or a directory to S3 bucket')
-        .command('download <s3Path>', 'Download directory from S3 bucket')
-        .command('rm <path>', 'Remove a file or a directory from S3 bucket')
+        .command('upload <localPath> [path] [--refreshTime refreshTime]', 'Upload a file or a directory to S3 bucket, refreshTime is the time in seconds to refresh (at least 60).')
+        .command('download <s3Path> [path]', 'Download directory from S3 bucket.')
+        .command('rm <path>', 'Remove a file or a directory from S3 bucket.')
         .command('init <backend>', 'init a new backend,now only support space.S3 backend do not need to be inited.')
         .options({
             'space': {
@@ -39,6 +53,7 @@ try {
             throw new Error('Space Config not found, please use `amplifys3 init space` to create one');
         }
     }
+
     initToken(appId).then(async (config) => {
         const s3 = new aws.S3();
         if(backendType === 'space') {
@@ -153,6 +168,7 @@ try {
                 break;
             case 'upload':
                 const uploadList = [];
+
                 const isFile = recursiveFiles(options.localPath, uploadList);
                 uploadList.forEach(filePath => {
                     const fileStream = fs.createReadStream(filePath);
@@ -164,6 +180,12 @@ try {
                     if(backendType === 'space') {
                         params.ACL = 'public-read';
                     }
+                    const refreshTime = parseInt(options.refreshTime);
+                    if (refreshTime != undefined && refreshTime > 0) {
+                        const time = Math.max(refreshTime, 60);
+                        // info('max-age=' + time);
+                        params.CacheControl = 'max-age=' + time;
+                    }
                     s3.upload(params, { partSize: 5 * 1024 * 1024, queueSize: 3 }, function (err, data) {
                         if (err) error(err);
                         else {
@@ -173,10 +195,17 @@ try {
                 });
                 break;
             case 'download':
-                const downloadList = await listAll(bucketName, `public/${options.s3Path}`)
+                const downloadList = await listAll(bucketName, `public/${options.s3Path}`);
                 downloadList.forEach(s3file => {
-                    if(s3file.Size > 0){
-                        const destFile = `${options.s3Path}${s3file.Key}`;
+                    if(s3file.Size > 0) {
+                        let targetPath = options.path;
+                        if (targetPath == undefined) {
+                            targetPath = ""
+                        }
+                        if (!targetPath.endsWith("/")) {
+                            targetPath = targetPath + "/"
+                        }
+                        const destFile = `${targetPath}${options.s3Path}${s3file.Key}`;
                         fs.mkdirSync(path.dirname(destFile),{recursive: true});
                         const destStream = fs.createWriteStream(destFile);
                         destStream.on('error', function (err) {
@@ -246,7 +275,12 @@ try {
             default:
                 break;
         }
-    }).catch(error);
+    }).catch(async (ce) => {
+        error(ce);
+        if(ce.code === 'NotAuthorizedException'){
+            log('Amplify Credentials is not exist or expired,please run `amplify console` to login.');
+        }
+    });
 } catch (err) {
     if (err.code === 'MODULE_NOT_FOUND') {
         if (!amplifyConfig) {
@@ -259,12 +293,13 @@ try {
     } else {
         error(err);
     }
-
 }
+
 function sizeTxt(bytes){
     if(bytes < 10485) return `${(bytes/1024.0).toFixed(2)} KB`
     else return `${(bytes/1024.0/1024.0).toFixed(2)} MB`
 }
+
 function recursiveFiles(filepath, fileList) {
     if (path.basename(filepath).startsWith('.')) {
         return false;
@@ -328,6 +363,7 @@ async function getAdminCognitoCredentials(idToken, identityId, region) {
         sessionToken: Credentials.SessionToken,
     };
 }
+
 async function refreshJWTs(authConfig) {
     const CognitoISP = new aws.CognitoIdentityServiceProvider({ region: authConfig.region });
     try {
@@ -344,15 +380,18 @@ async function refreshJWTs(authConfig) {
         throw e;
     }
 }
+
 function isJwtExpired(token) {
     const expiration = _.get(token, ['payload', 'exp'], 0);
     const secSinceEpoch = Math.round(new Date().getTime() / 1000);
     return secSinceEpoch >= expiration - 60;
 }
+
 function log(str) {
     const msg = chalk.green.bold(str);
     console.log(msg);
 }
+
 function info(str) {
     const msg = chalk.green.bold(str);
     const boxenOptions = {
@@ -362,6 +401,7 @@ function info(str) {
     const msgBox = boxen(msg, boxenOptions);
     console.log(msgBox);
 }
+
 function error(str) {
     const msg = chalk.red.bold(str);
     const boxenOptions = {
